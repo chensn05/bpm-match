@@ -1,0 +1,377 @@
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>BPM Match · 跑步音乐节拍匹配</title>
+<meta name="description" content="导入你的歌单，根据步频自动匹配歌曲节拍">
+<style>
+:root {
+  --cream: #FAF7F2; --sage: #8BA888; --sage-light: #A8C0A4; --sage-bg: #E8EDE5;
+  --coral: #E8826B; --coral-light: #F2A492; --coral-bg: #FDEDE8;
+  --warm-gray: #6B6B6B; --warm-gray-light: #999; --border: #E5E0D8;
+  --shadow: 0 2px 12px rgba(139,168,136,0.08); --radius: 16px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+  background: var(--cream); color: #333; min-height: 100vh;
+  max-width: 480px; margin: 0 auto; padding: 20px 16px 120px; position: relative;
+}
+.doodle { position: fixed; pointer-events: none; opacity: 0.12; z-index: 0; }
+.doodle-note-1 { top: 10px; right: 20px; font-size: 24px; color: var(--sage); transform: rotate(15deg); }
+.doodle-note-2 { top: 200px; left: -10px; font-size: 18px; color: var(--coral); transform: rotate(-10deg); }
+.doodle-runner { bottom: 140px; right: -5px; font-size: 28px; color: var(--sage); }
+.header { text-align: center; margin-bottom: 28px; position: relative; z-index: 1; }
+.header h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+.header h1 .bpm { color: var(--coral); }
+.header h1 .match { color: var(--sage); }
+.header .subtitle { font-size: 13px; color: var(--warm-gray); margin-top: 6px; letter-spacing: 1px; }
+.header .shoe { font-size: 22px; vertical-align: middle; }
+.card {
+  background: #fff; border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+  box-shadow: var(--shadow); border: 1.5px solid var(--border); position: relative; z-index: 1;
+}
+.bpm-section { text-align: center; }
+.bpm-display { font-size: 48px; font-weight: 800; color: var(--coral); line-height: 1; margin-bottom: 4px; }
+.bpm-display .unit { font-size: 16px; color: var(--warm-gray); font-weight: 400; margin-left: 4px; }
+.pace-ref { font-size: 13px; color: var(--warm-gray); margin-bottom: 16px; }
+.pace-ref .pace-val { color: var(--sage); font-weight: 600; }
+.bpm-slider {
+  width: 100%; height: 8px; -webkit-appearance: none; appearance: none;
+  background: var(--sage-bg); border-radius: 4px; outline: none; margin: 8px 0;
+}
+.bpm-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 28px; height: 28px;
+  border-radius: 50%; background: var(--coral); cursor: pointer;
+  border: 3px solid #fff; box-shadow: 0 2px 6px rgba(232,130,107,0.3);
+}
+.bpm-slider::-moz-range-thumb {
+  width: 28px; height: 28px; border-radius: 50%; background: var(--coral);
+  cursor: pointer; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(232,130,107,0.3);
+}
+.bpm-range { display: flex; justify-content: space-between; font-size: 11px; color: var(--warm-gray-light); margin-top: 4px; }
+.import-section .label { font-size: 14px; font-weight: 600; color: var(--sage); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+.import-box { display: flex; gap: 8px; }
+.import-input {
+  flex: 1; padding: 12px 14px; border: 1.5px dashed var(--sage-light); border-radius: 12px;
+  font-size: 13px; background: var(--sage-bg); color: #555; outline: none; transition: border-color 0.2s;
+}
+.import-input:focus { border-color: var(--coral); border-style: solid; }
+.import-btn {
+  padding: 12px 20px; background: var(--coral); color: #fff; border: none;
+  border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s; white-space: nowrap;
+}
+.import-btn:hover { background: var(--coral-light); }
+.import-btn:disabled { background: var(--warm-gray-light); cursor: not-allowed; }
+.platform-hint { font-size: 11px; color: var(--warm-gray-light); margin-top: 8px; }
+.upload-area {
+  border: 2px dashed var(--sage-light); border-radius: 12px; padding: 20px;
+  text-align: center; margin-top: 12px; cursor: pointer; transition: all 0.2s; background: var(--sage-bg);
+}
+.upload-area:hover, .upload-area.dragover { border-color: var(--coral); background: var(--coral-bg); }
+.upload-area .icon { font-size: 32px; margin-bottom: 6px; }
+.upload-area .text { font-size: 13px; color: var(--warm-gray); }
+.upload-area .hint { font-size: 11px; color: var(--warm-gray-light); margin-top: 4px; }
+.playlist-info { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.playlist-cover { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; background: var(--sage-bg); }
+.playlist-meta { flex: 1; }
+.playlist-name { font-size: 15px; font-weight: 600; color: #333; }
+.playlist-count { font-size: 12px; color: var(--warm-gray); margin-top: 2px; }
+.song-list { margin-top: 8px; }
+.song-item {
+  display: flex; align-items: center; padding: 12px 8px; border-bottom: 1px solid var(--border);
+  gap: 10px; cursor: pointer; transition: background 0.15s; border-radius: 8px; margin: 0 -8px;
+}
+.song-item:last-child { border-bottom: none; }
+.song-item:hover { background: var(--cream); }
+.song-item.playing { background: var(--coral-bg); }
+.song-item.has-file .song-name::after { content: ' 🎵'; }
+.song-num { width: 24px; text-align: center; font-size: 12px; color: var(--warm-gray-light); font-weight: 600; flex-shrink: 0; }
+.song-info { flex: 1; min-width: 0; }
+.song-name { font-size: 14px; font-weight: 500; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.song-artist { font-size: 12px; color: var(--warm-gray); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.song-bpm { text-align: right; flex-shrink: 0; min-width: 70px; }
+.song-bpm .original { font-size: 11px; color: var(--warm-gray-light); }
+.song-bpm .arrow { font-size: 10px; color: var(--warm-gray-light); margin: 0 2px; }
+.song-bpm .target { font-size: 14px; font-weight: 700; color: var(--sage); }
+.match-badge { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 6px; font-weight: 600; margin-top: 2px; }
+.match-high { background: var(--sage-bg); color: var(--sage); }
+.match-mid { background: #FFF4E6; color: #D4943C; }
+.match-low { background: var(--coral-bg); color: var(--coral); }
+.song-status { font-size: 10px; color: var(--warm-gray-light); margin-top: 2px; }
+.song-status.loaded { color: var(--sage); }
+.song-playing-icon { width: 20px; height: 16px; display: flex; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+.song-playing-icon span { width: 3px; background: var(--coral); border-radius: 2px; animation: wave 0.8s infinite ease-in-out; }
+.song-playing-icon span:nth-child(1) { height: 60%; animation-delay: 0s; }
+.song-playing-icon span:nth-child(2) { height: 100%; animation-delay: 0.15s; }
+.song-playing-icon span:nth-child(3) { height: 40%; animation-delay: 0.3s; }
+.song-playing-icon span:nth-child(4) { height: 80%; animation-delay: 0.45s; }
+@keyframes wave { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
+.player-bar {
+  position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 480px; background: #fff; border-top: 1.5px solid var(--border);
+  padding: 12px 16px 16px; z-index: 100; box-shadow: 0 -4px 20px rgba(0,0,0,0.04);
+}
+.player-current { font-size: 12px; color: var(--warm-gray); text-align: center; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.player-current .name { color: #333; font-weight: 600; }
+.player-rate { font-size: 11px; color: var(--coral); margin-left: 6px; }
+.player-controls { display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 10px; }
+.ctrl-btn { width: 40px; height: 40px; border: none; background: none; cursor: pointer; font-size: 18px; color: var(--warm-gray); display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background 0.2s; }
+.ctrl-btn:hover { background: var(--cream); }
+.ctrl-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.ctrl-play { width: 52px; height: 52px; background: var(--coral); color: #fff; font-size: 22px; box-shadow: 0 3px 10px rgba(232,130,107,0.3); }
+.ctrl-play:hover { background: var(--coral-light); }
+.ctrl-play:disabled { background: var(--warm-gray-light); cursor: not-allowed; box-shadow: none; }
+.finetune { display: flex; align-items: center; gap: 10px; padding: 0 4px; }
+.finetune label { font-size: 11px; color: var(--warm-gray); white-space: nowrap; }
+.finetune-slider { flex: 1; height: 4px; -webkit-appearance: none; appearance: none; background: var(--border); border-radius: 2px; outline: none; }
+.finetune-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--sage); cursor: pointer; }
+.finetune-slider::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--sage); cursor: pointer; border: none; }
+.finetune-val { font-size: 11px; color: var(--sage); font-weight: 600; min-width: 36px; text-align: right; }
+.empty-state { text-align: center; padding: 30px 20px; color: var(--warm-gray-light); }
+.empty-state .icon { font-size: 40px; margin-bottom: 8px; }
+.empty-state .text { font-size: 13px; }
+.loading { text-align: center; padding: 20px; color: var(--sage); font-size: 14px; }
+.loading .dots::after { content: ''; animation: dots 1.5s steps(4) infinite; }
+@keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+.error-msg { text-align: center; padding: 16px; color: var(--coral); font-size: 13px; line-height: 1.6; }
+.play-hint { text-align: center; font-size: 11px; color: var(--warm-gray-light); margin-top: 12px; padding: 8px; background: var(--cream); border-radius: 8px; }
+.stats-bar { display: flex; justify-content: space-around; padding: 10px 0; margin-bottom: 10px; border-bottom: 1px solid var(--border); }
+.stat-item { text-align: center; }
+.stat-val { font-size: 18px; font-weight: 700; color: var(--sage); }
+.stat-label { font-size: 10px; color: var(--warm-gray-light); margin-top: 2px; }
+.footer-doodle { text-align: center; margin: 20px 0; font-size: 11px; color: var(--warm-gray-light); letter-spacing: 2px; }
+</style>
+</head>
+<body>
+<div class="doodle doodle-note-1">🎵</div>
+<div class="doodle doodle-note-2">🎶</div>
+<div class="doodle doodle-runner">🏃</div>
+<div class="header">
+  <h1><span class="bpm">BPM</span> <span class="match">Match</span> <span class="shoe">👟</span></h1>
+  <div class="subtitle">跑步音乐节拍匹配器</div>
+</div>
+<div class="card bpm-section">
+  <div class="bpm-display"><span id="bpmValue">170</span><span class="unit">BPM</span></div>
+  <div class="pace-ref">配速参考 <span class="pace-val" id="paceValue">5'02"/km</span></div>
+  <input type="range" class="bpm-slider" id="bpmSlider" min="140" max="200" value="170" step="1">
+  <div class="bpm-range"><span>140 慢跑</span><span>170 中速</span><span>200 冲刺</span></div>
+</div>
+<div class="card import-section">
+  <div class="label">📋 导入歌单（可选）</div>
+  <div class="import-box">
+    <input type="text" class="import-input" id="playlistUrl" placeholder="粘贴汽水音乐歌单链接">
+    <button class="import-btn" id="importBtn" onclick="importPlaylist()">导入</button>
+  </div>
+  <div class="platform-hint">导入歌单后可查看匹配度 · 也可跳过直接上传音乐</div>
+</div>
+<div class="card">
+  <div class="label" style="font-size:14px;font-weight:600;color:var(--coral);margin-bottom:10px;">📁 上传音乐文件</div>
+  <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+    <div class="icon">🎧</div>
+    <div class="text">点击或拖拽 MP3 文件到这里</div>
+    <div class="hint">支持 MP3 / WAV / M4A · 可多选</div>
+  </div>
+  <input type="file" id="fileInput" multiple accept=".mp3,.wav,.m4a,.ogg" style="display:none" onchange="handleFiles(this.files)">
+</div>
+<div class="card playlist-card" id="playlistCard" style="display:none;">
+  <div class="playlist-info" id="playlistInfo" style="display:none;">
+    <img class="playlist-cover" id="playlistCover" src="" alt="">
+    <div class="playlist-meta">
+      <div class="playlist-name" id="playlistName"></div>
+      <div class="playlist-count" id="playlistCount"></div>
+    </div>
+  </div>
+  <div class="stats-bar" id="statsBar" style="display:none;">
+    <div class="stat-item"><div class="stat-val" id="statHigh">0</div><div class="stat-label">高匹配</div></div>
+    <div class="stat-item"><div class="stat-val" id="statAvg">0%</div><div class="stat-label">平均匹配</div></div>
+    <div class="stat-item"><div class="stat-val" id="statSongs">0</div><div class="stat-label">歌曲数</div></div>
+  </div>
+  <div class="song-list" id="songList"></div>
+  <div class="play-hint" id="playHint">💡 上传 MP3 文件后，点击歌曲即可变速播放</div>
+</div>
+<div class="card" id="emptyCard">
+  <div class="empty-state">
+    <div class="icon">🎧</div>
+    <div class="text">上传音乐文件或导入歌单，开始匹配你的步频</div>
+  </div>
+</div>
+<div class="player-bar" id="playerBar" style="display:none;">
+  <div class="player-current">
+    <span class="name" id="currentSongName">—</span>
+    <span id="currentSongArtist"></span>
+    <span class="player-rate" id="playerRate"></span>
+  </div>
+  <div class="player-controls">
+    <button class="ctrl-btn" id="prevBtn" onclick="prevSong()">⏮</button>
+    <button class="ctrl-btn ctrl-play" id="playBtn" onclick="togglePlay()">▶</button>
+    <button class="ctrl-btn" id="nextBtn" onclick="nextSong()">⏭</button>
+  </div>
+  <div class="finetune">
+    <label>微调</label>
+    <input type="range" class="finetune-slider" id="finetuneSlider" min="-10" max="10" value="0" step="1" oninput="updateFinetune()">
+    <span class="finetune-val" id="finetuneVal">0%</span>
+  </div>
+</div>
+<div class="footer-doodle">— run to the beat —</div>
+<audio id="audioPlayer"></audio>
+<script>
+let songs = [];
+let currentIdx = -1;
+let targetBPM = 170;
+let finetune = 0;
+let isPlaying = false;
+const CORS_PROXY = 'https://corsproxy.io/?url=';
+const audio = document.getElementById('audioPlayer');
+const bpmSlider = document.getElementById('bpmSlider');
+bpmSlider.addEventListener('input', () => {
+  targetBPM = parseInt(bpmSlider.value);
+  document.getElementById('bpmValue').textContent = targetBPM;
+  updatePace(); updateSongList(); updatePlaybackRate();
+});
+function updatePace() {
+  const stride = 1.4, speed = targetBPM * stride * 60 / 1000, paceSec = 3600 / speed;
+  document.getElementById('paceValue').textContent = Math.floor(paceSec/60) + "'" + String(Math.round(paceSec%60)).padStart(2,'0') + '"/km';
+}
+const uploadArea = document.getElementById('uploadArea');
+uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+uploadArea.addEventListener('drop', (e) => { e.preventDefault(); uploadArea.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+function handleFiles(files) {
+  const audioFiles = Array.from(files).filter(f => /\.(mp3|wav|m4a|ogg)$/i.test(f.name));
+  if (audioFiles.length === 0) return;
+  document.getElementById('emptyCard').style.display = 'none';
+  document.getElementById('playlistCard').style.display = 'block';
+  for (const file of audioFiles) {
+    const name = file.name.replace(/\.[^.]+$/, '');
+    const existing = songs.find(s => s.name === name);
+    if (existing) { if (!existing.fileUrl) { existing.fileUrl = URL.createObjectURL(file); existing.fileName = file.name; } }
+    else { songs.push({ name, artist: '本地文件', album: '', duration: '', bpm: null, fileUrl: URL.createObjectURL(file), fileName: file.name }); }
+  }
+  updateStats(); updateSongList();
+}
+async function importPlaylist() {
+  const url = document.getElementById('playlistUrl').value.trim();
+  if (!url) return;
+  const btn = document.getElementById('importBtn');
+  btn.disabled = true; btn.textContent = '解析中...';
+  document.getElementById('emptyCard').innerHTML = '<div class="loading">正在解析歌单<span class="dots"></span></div>';
+  try {
+    const resp = await fetch(CORS_PROXY + encodeURIComponent(url));
+    const html = await resp.text();
+    const result = parseQishuiHtml(html);
+    if (result.songs.length === 0) throw new Error('未能解析出歌曲，请检查链接');
+    for (const ns of result.songs) { if (!songs.find(s => s.name === ns.name)) songs.push(ns); }
+    renderPlaylist(result);
+  } catch (e) {
+    document.getElementById('emptyCard').style.display = 'block';
+    document.getElementById('emptyCard').innerHTML = '<div class="error-msg">⚠️ ' + e.message + '</div>';
+  } finally { btn.disabled = false; btn.textContent = '导入'; }
+}
+function parseQishuiHtml(html) {
+  let name = '未知歌单';
+  const nm = html.match(/<meta[^>]+name="title"[^>]+content="([^"]+)"/);
+  if (nm) name = decodeEntities(nm[1]);
+  let cover = '';
+  const cm = html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/);
+  if (cm) cover = cm[1];
+  const texts = [], rx = />([^<]{2,200})</g; let m;
+  while ((m = rx.exec(html)) !== null) texts.push(m[1].trim());
+  const skip = ['汽水音乐','邀请你来','window.','function','var ','document','http','{"','/*','!function','baseScheme','isInWechat','force forbidden','Access to'];
+  const parsed = [];
+  for (let i = 0; i < texts.length - 1; i++) {
+    const t = texts[i];
+    if (t.length < 2 || t.length > 100 || t.startsWith('{') || t.startsWith('//')) continue;
+    if (skip.some(p => t.startsWith(p))) continue;
+    if (texts[i+1].includes(' • ')) {
+      const parts = texts[i+1].split(' • ');
+      parsed.push({ name: decodeEntities(t), artist: decodeEntities(parts[0].trim()), album: '', duration: '', bpm: null });
+      i++;
+    }
+  }
+  const tids = (html.match(/"id"\s*:\s*"(7\d{17,19})"/g) || []).map(m => m.match(/"(\d+)"/)[1]);
+  const durs = html.match(/"duration"\s*:\s*(\d+)\s*,\s*"name"/g) || [];
+  for (let i = 0; i < parsed.length; i++) {
+    if (i < tids.length) parsed[i].track_id = tids[i];
+    if (i < durs.length) { const ms = parseInt(durs[i].match(/(\d+)/)[1]); parsed[i].duration = Math.floor(ms/60000)+':'+String(Math.floor((ms%60000)/1000)).padStart(2,'0'); }
+  }
+  return { name, cover, songs: parsed, song_count: parsed.length };
+}
+function decodeEntities(s) { const d = document.createElement('div'); d.innerHTML = s; return d.textContent || s; }
+function renderPlaylist(data) {
+  document.getElementById('emptyCard').style.display = 'none';
+  document.getElementById('playlistCard').style.display = 'block';
+  if (data.name) {
+    document.getElementById('playlistInfo').style.display = 'flex';
+    document.getElementById('playlistName').textContent = data.name;
+    document.getElementById('playlistCount').textContent = (data.song_count || songs.length) + ' 首歌曲 · 汽水音乐';
+    const c = document.getElementById('playlistCover');
+    if (data.cover) { c.src = data.cover; c.style.display = 'block'; } else { c.style.display = 'none'; }
+  }
+  updateStats(); updateSongList();
+}
+function updateStats() {
+  const hi = songs.filter(s => calcMatch(s.bpm||estimateBPM(s.name,s.artist),targetBPM)>=90).length;
+  const avg = songs.length>0 ? Math.round(songs.reduce((a,s)=>a+calcMatch(s.bpm||estimateBPM(s.name,s.artist),targetBPM),0)/songs.length) : 0;
+  document.getElementById('statHigh').textContent = hi;
+  document.getElementById('statAvg').textContent = avg+'%';
+  document.getElementById('statSongs').textContent = songs.length;
+  document.getElementById('statsBar').style.display = 'flex';
+}
+function updateSongList() {
+  const sorted = songs.map((s,i)=>({...s,origIdx:i})).sort((a,b)=>calcMatch(b.bpm||estimateBPM(b.name,b.artist),targetBPM)-calcMatch(a.bpm||estimateBPM(a.name,a.artist),targetBPM));
+  document.getElementById('songList').innerHTML = sorted.map(s=>{
+    const i=s.origIdx, cur=i===currentIdx, bpm=s.bpm||estimateBPM(s.name,s.artist), pct=calcMatch(bpm,targetBPM);
+    const cls=pct>=90?'high':pct>=70?'mid':'low', hf=s.fileUrl?'has-file':'';
+    const ic=cur?'<div class="song-playing-icon"><span></span><span></span><span></span><span></span></div>':'<div class="song-num">'+(i+1)+'</div>';
+    const st=s.fileUrl?'<div class="song-status loaded">✓ 可播放</div>':'<div class="song-status">未上传文件</div>';
+    return '<div class="song-item '+(cur?'playing ':'')+hf+'" onclick="selectSong('+i+')">'+ic+'<div class="song-info"><div class="song-name">'+escapeHtml(s.name)+'</div><div class="song-artist">'+escapeHtml(s.artist)+(s.duration?' · '+s.duration:'')+'</div>'+st+'</div><div class="song-bpm"><div><span class="original">'+bpm+'</span><span class="arrow">→</span><span class="target">'+targetBPM+'</span></div><span class="match-badge match-'+cls+'">'+pct+'%</span></div></div>';
+  }).join('');
+}
+function estimateBPM(name) { let h=0; for(let i=0;i<name.length;i++){h=((h<<5)-h)+name.charCodeAt(i);h|=0;} return 60+(Math.abs(h)%120); }
+function calcMatch(o,t) { return Math.max(0,Math.round(100-Math.min(Math.abs(o-t),Math.abs(o*2-t),Math.abs(o/2-t))/Math.max(t,o)*100)); }
+function escapeHtml(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+function selectSong(idx) {
+  if(idx<0||idx>=songs.length) return;
+  currentIdx=idx; const s=songs[idx];
+  document.getElementById('currentSongName').textContent=s.name;
+  document.getElementById('currentSongArtist').textContent=' · '+s.artist;
+  document.getElementById('playerBar').style.display='block';
+  const pb=document.getElementById('playBtn');
+  if(s.fileUrl) {
+    audio.src=s.fileUrl;
+    audio.play().then(()=>{isPlaying=true;pb.textContent='⏸';}).catch(()=>{isPlaying=false;pb.textContent='▶';});
+    document.getElementById('prevBtn').disabled=false;
+    document.getElementById('nextBtn').disabled=false;
+    document.getElementById('playBtn').disabled=false;
+  } else { pb.textContent='▶'; pb.disabled=true; document.getElementById('prevBtn').disabled=true; document.getElementById('nextBtn').disabled=true; }
+  updateSongList(); updatePlaybackRate();
+}
+function togglePlay() {
+  if(currentIdx<0) return; const pb=document.getElementById('playBtn');
+  if(isPlaying){audio.pause();pb.textContent='▶';isPlaying=false;}
+  else if(audio.src){audio.play().then(()=>{pb.textContent='⏸';isPlaying=true;}).catch(()=>{});}
+}
+function prevSong(){if(currentIdx>0)selectSong(currentIdx-1);}
+function nextSong(){if(currentIdx<songs.length-1)selectSong(currentIdx+1);}
+audio.addEventListener('ended',()=>{nextSong();});
+audio.addEventListener('play',()=>{isPlaying=true;document.getElementById('playBtn').textContent='⏸';updatePlaybackRate();});
+audio.addEventListener('pause',()=>{isPlaying=false;document.getElementById('playBtn').textContent='▶';});
+function updatePlaybackRate() {
+  if(!audio.src||currentIdx<0) return; const s=songs[currentIdx]; if(!s) return;
+  const bpm=s.bpm||estimateBPM(s.name); let r=targetBPM/bpm;
+  if(r>2.0)r=2.0; if(r<0.5)r=0.5; r*=(1+finetune/100);
+  if('preservesPitch'in audio)audio.preservesPitch=true;
+  if('mozPreservesPitch'in audio)audio.mozPreservesPitch=true;
+  if('webkitPreservesPitch'in audio)audio.webkitPreservesPitch=true;
+  audio.playbackRate=r;
+  document.getElementById('playerRate').textContent='×'+r.toFixed(2);
+}
+function updateFinetune(){finetune=parseInt(document.getElementById('finetuneSlider').value);document.getElementById('finetuneVal').textContent=(finetune>0?'+':'')+finetune+'%';updatePlaybackRate();}
+updatePace();
+</script>
+</body>
+</html>
+```
